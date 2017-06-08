@@ -22,7 +22,8 @@ proc isChatCommand*(content: string ): bool =
   return content.strip().startsWith("/")
 
 
-iterator lexCommands*(line: string): string =
+# iterator lexCommands*(line: string, seperators: set[char] = {}): string =
+iterator lexCommands*(line: string, seperators: seq[char] = @[]): string =
   var param = ""
   var pos = 0
   var inSingle, inMulti, inEscape: bool = false
@@ -77,9 +78,34 @@ iterator lexCommands*(line: string): string =
       else:
         yield buf
         buf.setLen(0)
-
     else: # case
-      buf.add cur
+
+      if cur in seperators and not inEscape and not (inSingle or inMulti) :
+        # discard
+        yield buf
+        buf.setLen(0)
+        yield $cur
+      else:
+        buf.add cur
+
+        # if inEscape:
+        #   buf.add cur
+        #   pos.inc
+        #   inEscape = false
+        #   continue
+
+        # if inSingle or inMulti:
+        #   yield buf 
+        #   buf.setLen(0)
+        #   buf.add cur 
+        #   pos.inc
+        #   continue
+        # else:
+        #   yield buf
+        #   buf.setLen(0)
+      # else:
+      #   buf.add cur
+      # buf.add cur
     pos.inc
 
   if buf != "":
@@ -87,14 +113,14 @@ iterator lexCommands*(line: string): string =
     buf.setLen(0)
 
     
-proc newChatCommand*(line: string, stripSlash = true): ChatCommand = 
+proc newChatCommand*(line: string, stripSlash = true, seperators: seq[char] = @[]): ChatCommand = 
   result = ChatCommand()
   result.params = @[]
   result.cmd = ""
   var pos = 0
   if line[0] == '/' and stripSlash:
     pos = 1
-  for each in lexCommands(line[pos..^1]):
+  for each in lexCommands(line[pos..^1], seperators):
     if result.cmd.len == 0:
       result.cmd = each
     else:
@@ -122,5 +148,21 @@ when isMainModule:
   assert newChatCommand("""/foo "baa' baz"""").params == @["baa\' baz"]
   assert newChatCommand("""/foo "baa\\baz"""").params == @["baa\\baz"]
   assert newChatCommand("""/foo "baa\\ baz"""").params == @["baa\\ baz"]
+
+
+  block:
+    let userinput = """self.foo() "asdasd|asdjhaksjdh" """
+    let c = newChatCommand(userinput, false ,@['|', '.']) 
+    assert c.cmd == "self"
+    assert c.params == @[".", "foo()", "asdasd|asdjhaksjdh"]
+
+  block:
+    let userinput = """self.foo() asdasd|asdjhaksjdh """
+    let c = newChatCommand(userinput, false ,@['|', '.']) 
+    assert c.cmd == "self"
+    assert c.params == @[".", "foo()", "asdasd", "|", "asdjhaksjdh"]    
+    # for each in lexCommands(userinput, seperators = @['|']):
+      # echo each 
+
   # let userinput = """/cmd param1 param2 "param in quotes" param4 "anoter param in quote" """
   # echo $newChatCommand(userinput)
